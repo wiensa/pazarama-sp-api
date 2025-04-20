@@ -110,6 +110,32 @@ class OrderService
     }
 
     /**
+     * Tekil iade bilgisini getirir
+     *
+     * @param string $refund_id İade ID'si
+     * @return array
+     */
+    public function getReturn(string $refund_id): array
+    {
+        return $this->api->request('POST', '/order/getRefund', [
+            'refundId' => $refund_id
+        ]);
+    }
+
+    /**
+     * İade alt öğelerini getirir
+     *
+     * @param string $refund_id İade ID'si
+     * @return array
+     */
+    public function getReturnItems(string $refund_id): array
+    {
+        return $this->api->request('POST', '/order/getRefundItems', [
+            'refundId' => $refund_id
+        ]);
+    }
+
+    /**
      * İade talebini günceller (Onay veya Red)
      *
      * @param string $refund_id İade ID'si

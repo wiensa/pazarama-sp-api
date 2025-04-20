@@ -11,40 +11,156 @@ use PazaramaApi\PazaramaSpApi\Services\OrderService;
 use PazaramaApi\PazaramaSpApi\Services\ProductService;
 use PazaramaApi\PazaramaSpApi\Services\ReturnService;
 use PazaramaApi\PazaramaSpApi\Services\ShippingService;
+use PazaramaApi\PazaramaSpApi\Traits\ApiRequest;
 
-class PazaramaSpApi
+/**
+ * PazaramaApi entegrasyon sınıfı
+ */
+final class PazaramaSpApi
 {
-    private const API_BASE_URL = 'https://isortagimapi.pazarama.com';
-    private const AUTH_URL = 'https://isortagimgiris.pazarama.com/connect/token';
+    use ApiRequest;
 
+    /**
+     * API temel URL
+     *
+     * @var string
+     */
+    private string $base_url;
+
+    /**
+     * API kimlik doğrulama URL'i
+     *
+     * @var string
+     */
+    private string $auth_url;
+
+    /**
+     * API Client ID
+     *
+     * @var string
+     */
+    private string $client_id;
+
+    /**
+     * API Client Secret
+     *
+     * @var string
+     */
+    private string $client_secret;
+
+    /**
+     * HTTP Client instance
+     *
+     * @var \GuzzleHttp\Client
+     */
     private Client $http_client;
+
+    /**
+     * Authentication HTTP Client instance
+     *
+     * @var \GuzzleHttp\Client
+     */
     private Client $auth_client;
-    private array $config;
+
+    /**
+     * Access token
+     *
+     * @var string
+     */
     private string $access_token;
+
+    /**
+     * Token expiration timestamp
+     *
+     * @var int
+     */
     private int $token_expires_at;
-    
+
+    /**
+     * Ürün servisi
+     *
+     * @var ProductService|null
+     */
     private ?ProductService $product_service = null;
+    
+    /**
+     * Sipariş servisi
+     *
+     * @var OrderService|null
+     */
     private ?OrderService $order_service = null;
+    
+    /**
+     * Kategori servisi
+     *
+     * @var CategoryService|null
+     */
     private ?CategoryService $category_service = null;
+    
+    /**
+     * Toplu işlem servisi
+     *
+     * @var BulkOperationService|null
+     */
     private ?BulkOperationService $bulk_operation_service = null;
+    
+    /**
+     * Kargo servisi
+     *
+     * @var ShippingService|null
+     */
     private ?ShippingService $shipping_service = null;
+    
+    /**
+     * İade servisi
+     *
+     * @var ReturnService|null
+     */
     private ?ReturnService $return_service = null;
+    
+    /**
+     * Marka servisi
+     *
+     * @var BrandService|null
+     */
     private ?BrandService $brand_service = null;
 
-    public function __construct(array $config)
+    /**
+     * PazaramaSpApi sınıfı yapıcı fonksiyonu
+     *
+     * @param array $config Konfigürasyon parametreleri
+     */
+    public function __construct(array $config = [])
     {
-        $this->config = $config;
-        $this->http_client = new Client([
-            'base_uri' => self::API_BASE_URL,
-            'timeout' => $config['timeout'] ?? 30,
-            'http_errors' => false,
-        ]);
-        $this->auth_client = new Client([
-            'base_uri' => self::AUTH_URL,
-            'timeout' => $config['timeout'] ?? 30,
-            'http_errors' => false,
-        ]);
+        $this->base_url = $config['base_url'] ?? config('pazarama-api.base_url', 'https://isortagimapi.pazarama.com');
+        $this->auth_url = $config['auth_url'] ?? config('pazarama-api.auth_url', 'https://isortagimgiris.pazarama.com/connect/token');
+        $this->client_id = $config['client_id'] ?? config('pazarama-api.client_id');
+        $this->client_secret = $config['client_secret'] ?? config('pazarama-api.client_secret');
+
+        $this->initHttpClient();
         $this->token_expires_at = 0;
+    }
+
+    /**
+     * HTTP istemcilerini başlatır
+     * 
+     * @return void
+     */
+    private function initHttpClient(): void
+    {
+        $timeout = config('pazarama-api.timeout', 30);
+        
+        $this->http_client = new Client([
+            'base_uri' => $this->base_url,
+            'timeout' => $timeout,
+            'http_errors' => false,
+        ]);
+        
+        $this->auth_client = new Client([
+            'base_uri' => $this->auth_url,
+            'timeout' => $timeout,
+            'http_errors' => false,
+        ]);
     }
 
     /**
@@ -60,30 +176,40 @@ class PazaramaSpApi
             return $this->access_token;
         }
 
-        $response = $this->auth_client->post('', [
-            'form_params' => [
-                'grant_type' => 'client_credentials',
-                'scope' => 'merchantgatewayapi.fullaccess'
-            ],
-            'auth' => [
-                $this->config['client_id'],
-                $this->config['client_secret']
-            ]
-        ]);
+        try {
+            $response = $this->auth_client->post('', [
+                'form_params' => [
+                    'grant_type' => 'client_credentials',
+                    'scope' => 'merchantgatewayapi.fullaccess'
+                ],
+                'auth' => [
+                    $this->client_id,
+                    $this->client_secret
+                ]
+            ]);
 
-        $response_body = json_decode($response->getBody()->getContents(), true);
+            $response_body = json_decode($response->getBody()->getContents(), true);
 
-        if ($response->getStatusCode() !== 200 || !isset($response_body['access_token'])) {
+            if ($response->getStatusCode() !== 200 || !isset($response_body['access_token'])) {
+                throw new PazaramaApiException(
+                    $response_body['message'] ?? 'Yetkilendirme başarısız', 
+                    $response->getStatusCode()
+                );
+            }
+
+            $this->access_token = $response_body['access_token'];
+            $this->token_expires_at = time() + ($response_body['expires_in'] ?? 3600);
+
+            return $this->access_token;
+        } catch (\Exception $e) {
             throw new PazaramaApiException(
-                $response_body['message'] ?? 'Yetkilendirme başarısız', 
-                $response->getStatusCode()
+                'Yetkilendirme hatası: ' . $e->getMessage(),
+                500,
+                null,
+                ['error' => $e->getMessage()],
+                $e
             );
         }
-
-        $this->access_token = $response_body['access_token'];
-        $this->token_expires_at = time() + ($response_body['expires_in'] ?? 3600);
-
-        return $this->access_token;
     }
 
     /**
@@ -132,7 +258,17 @@ class PazaramaSpApi
 
         return $response_body;
     }
-    
+
+    /**
+     * HTTP istemcisini döndürür
+     *
+     * @return \GuzzleHttp\Client
+     */
+    public function getHttpClient(): Client
+    {
+        return $this->http_client;
+    }
+
     /**
      * ProductService örneğini döndürür
      * 
@@ -180,7 +316,7 @@ class PazaramaSpApi
      * 
      * @return BulkOperationService
      */
-    public function bulk(): BulkOperationService
+    public function bulkOperations(): BulkOperationService
     {
         if ($this->bulk_operation_service === null) {
             $this->bulk_operation_service = new BulkOperationService($this);
@@ -229,83 +365,5 @@ class PazaramaSpApi
         }
         
         return $this->brand_service;
-    }
-    
-    /**
-     * Ürün listesini getirir
-     * 
-     * @param array $params Sorgu parametreleri
-     * @return array Ürün listesi
-     */
-    public function getProducts(array $params = []): array
-    {
-        return $this->products()->list($params);
-    }
-    
-    /**
-     * Belirli bir ürünü getirir
-     * 
-     * @param string $id Ürün ID'si
-     * @return array Ürün bilgileri
-     */
-    public function getProduct(string $id): array
-    {
-        return $this->products()->get($id);
-    }
-    
-    /**
-     * Sipariş listesini getirir
-     * 
-     * @param array $params Sorgu parametreleri
-     * @return array Sipariş listesi
-     */
-    public function getOrders(array $params = []): array
-    {
-        return $this->orders()->list($params);
-    }
-    
-    /**
-     * Belirli bir siparişi getirir
-     * 
-     * @param string $id Sipariş ID'si
-     * @return array Sipariş bilgileri
-     */
-    public function getOrder(string $id): array
-    {
-        return $this->orders()->get($id);
-    }
-    
-    /**
-     * Kategori listesini getirir
-     * 
-     * @param array $params Sorgu parametreleri
-     * @return array Kategori listesi
-     */
-    public function getCategories(array $params = []): array
-    {
-        return $this->categories()->list($params);
-    }
-    
-    /**
-     * Belirli bir kategoriyi getirir
-     * 
-     * @param string $id Kategori ID'si
-     * @return array Kategori bilgileri
-     */
-    public function getCategory(string $id): array
-    {
-        return $this->categories()->get($id);
-    }
-    
-    /**
-     * Marka listesini getirir
-     * 
-     * @param int $page Sayfa numarası
-     * @param int $size Sayfa başına öğe sayısı
-     * @return array Marka listesi
-     */
-    public function getBrands(int $page = 1, int $size = 100): array
-    {
-        return $this->brands()->list($page, $size);
     }
 } 

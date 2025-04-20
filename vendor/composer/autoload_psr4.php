@@ -56,6 +56,8 @@ return array(
     'Pest\\Plugin\\' => array($vendorDir . '/pestphp/pest-plugin/src'),
     'Pest\\Arch\\' => array($vendorDir . '/pestphp/pest-plugin-arch/src'),
     'Pest\\' => array($vendorDir . '/pestphp/pest/src'),
+    'PazaramaApi\\PazaramaSpApi\\Tests\\' => array($baseDir . '/tests'),
+    'PazaramaApi\\PazaramaSpApi\\' => array($baseDir . '/src'),
     'ParaTest\\' => array($vendorDir . '/brianium/paratest/src'),
     'PHPUnit\\Architecture\\' => array($vendorDir . '/ta-tikoma/phpunit-architecture-test/src'),
     'PHPStan\\PhpDocParser\\' => array($vendorDir . '/phpstan/phpdoc-parser/src'),
@@ -103,6 +105,4 @@ return array(
     'Carbon\\' => array($vendorDir . '/nesbot/carbon/src/Carbon'),
     'Brick\\Math\\' => array($vendorDir . '/brick/math/src'),
     'App\\' => array($vendorDir . '/laravel/pint/app'),
-    'AlgoYounes\\Skeleton\\Tests\\' => array($baseDir . '/tests'),
-    'AlgoYounes\\Skeleton\\' => array($baseDir . '/src'),
 );

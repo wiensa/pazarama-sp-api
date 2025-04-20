@@ -74,6 +74,18 @@ class BrandService
             return null;
         }
         
-        return $brands['data'][0];
+        // Değiştirilen kısım: API yanıt yapısına göre uyarlandı
+        // Eğer data içinde 'items' anahtarı varsa, bu koleksiyonun ilk elemanını döndür
+        if (isset($brands['data']['items']) && !empty($brands['data']['items'])) {
+            return $brands['data']['items'][0];
+        }
+        
+        // Eğer doğrudan brands['data'] bir dizi ise ve elemanı varsa ilk elemanı döndür
+        if (is_array($brands['data']) && count($brands['data']) > 0) {
+            return $brands['data'][0];
+        }
+        
+        // Hiçbir eleman bulunamazsa null döndür
+        return null;
     }
 } 

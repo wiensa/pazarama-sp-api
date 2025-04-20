@@ -12,7 +12,6 @@ Bu paket, Laravel uygulamalarında Pazarama Satıcı Paneli (SP) API ile entegra
 - Kargo ve teslimat yönetimi
 - İade işlemleri
 - Toplu işlemler (fiyat, stok güncellemeleri)
-- Muhasebe ve finans bilgilerine erişim
 
 ## Gereksinimler
 
@@ -31,30 +30,34 @@ composer require wiensa/pazarama-sp-api
 Laravel 5.5+ versiyonları için servis sağlayıcısı otomatik olarak kaydedilecektir. Daha eski versiyonlar için, `config/app.php` dosyasındaki `providers` dizisine aşağıdaki satırı ekleyin:
 
 ```php
-PazaramaApi\PazaramaSpApi\Providers\PazaramaSpApiServiceProvider::class,
+PazaramaApi\PazaramaSpApi\Providers\PazaramaServiceProvider::class,
 ```
 
 (Opsiyonel) Alias eklemek için `config/app.php` dosyasındaki `aliases` dizisine aşağıdaki satırı ekleyin:
 
 ```php
-'PazaramaSpApi' => PazaramaApi\PazaramaSpApi\Facades\PazaramaSpApi::class,
+'Pazarama' => PazaramaApi\PazaramaSpApi\Facades\Pazarama::class,
 ```
 
 Yapılandırma dosyasını yayınlamak için aşağıdaki komutu çalıştırın:
 
 ```bash
-php artisan vendor:publish --provider="PazaramaApi\PazaramaSpApi\Providers\PazaramaSpApiServiceProvider" --tag="config"
+php artisan vendor:publish --provider="PazaramaApi\PazaramaSpApi\Providers\PazaramaServiceProvider" --tag="config"
 ```
 
 ## Yapılandırma
 
-`config/pazarama-sp-api.php` dosyasını düzenleyebilir veya `.env` dosyanıza aşağıdaki değişkenleri ekleyebilirsiniz:
+`config/pazarama-api.php` dosyasını düzenleyebilir veya `.env` dosyanıza aşağıdaki değişkenleri ekleyebilirsiniz:
 
 ```dotenv
 PAZARAMA_CLIENT_ID=your-client-id
 PAZARAMA_CLIENT_SECRET=your-client-secret
-PAZARAMA_API_TIMEOUT=30
-PAZARAMA_API_DEBUG=false
+PAZARAMA_API_URL=https://isortagimapi.pazarama.com
+PAZARAMA_AUTH_URL=https://isortagimgiris.pazarama.com/connect/token
+PAZARAMA_TIMEOUT=30
+PAZARAMA_DEBUG=false
+PAZARAMA_RETRY_ATTEMPTS=3
+PAZARAMA_RETRY_DELAY=1000
 ```
 
 API kimlik bilgilerinizi (client_id ve client_secret) Pazarama Satıcı Paneli üzerindeki Hesap Bilgileri alanından edinebilirsiniz.
@@ -64,46 +67,43 @@ API kimlik bilgilerinizi (client_id ve client_secret) Pazarama Satıcı Paneli �
 ### Facade ile Kullanım
 
 ```php
-use PazaramaApi\PazaramaSpApi\Facades\PazaramaSpApi;
+use PazaramaApi\PazaramaSpApi\Facades\Pazarama;
 
-// Ürün listesini getir
-$products = PazaramaSpApi::getProducts(['Approved' => true, 'Size' => 100, 'Page' => 1]);
+// Ürün servisine erişim
+$products = Pazarama::products()->list(['Approved' => true, 'Size' => 100, 'Page' => 1]);
 
 // Belirli bir ürünü getir
-$product = PazaramaSpApi::getProduct('urun-kodu');
+$product = Pazarama::products()->get('urun-kodu');
 
-// Sipariş listesini getir
-$orders = PazaramaSpApi::getOrders([
+// Sipariş servisine erişim
+$orders = Pazarama::orders()->list([
     'startDate' => '2023-01-01',
     'endDate' => '2023-01-31'
 ]);
 
-// Kategori listesini getir
-$categories = PazaramaSpApi::getCategories();
+// Kategori servisine erişim
+$categories = Pazarama::categories()->list();
 
-// Marka listesini getir
-$brands = PazaramaSpApi::getBrands(1, 100);
+// Marka servisine erişim
+$brands = Pazarama::brands()->list(1, 100);
 ```
 
 ### Helper Fonksiyonu ile Kullanım
 
 ```php
-// Ürün listesini getir
-$products = pazarama_api()->getProducts(['Approved' => true]);
-
 // Ürün servisine erişim
-$productService = pazarama_api()->products();
-$product = $productService->get('urun-kodu');
+$productService = pazarama()->products();
+$products = $productService->list(['Approved' => true]);
 
 // Sipariş servisine erişim
-$orderService = pazarama_api()->orders();
+$orderService = pazarama()->orders();
 $orders = $orderService->list([
     'startDate' => '2023-01-01',
     'endDate' => '2023-01-31'
 ]);
 
 // Kategori servisine erişim
-$categoryService = pazarama_api()->categories();
+$categoryService = pazarama()->categories();
 $categories = $categoryService->list();
 ```
 
@@ -111,10 +111,15 @@ $categories = $categoryService->list();
 
 ```php
 // Pazarama API örneğini al
-$api = app('pazarama-sp-api');
+$api = app('pazarama');
 
-// Ürün listesini getir
-$products = $api->getProducts(['Approved' => true]);
+// Ürün servisine erişim
+$productService = $api->products();
+$products = $productService->list(['Approved' => true]);
+
+// Diğer servislere doğrudan erişebilirsiniz
+$brandService = app('pazarama.brand');
+$brands = $brandService->list();
 ```
 
 ## Servisler
@@ -125,7 +130,7 @@ Paket aşağıdaki servisleri içermektedir:
 
 ```php
 // Ürün servisine erişim
-$productService = pazarama_api()->products();
+$productService = pazarama()->products();
 
 // Ürün listesini getir
 $products = $productService->list(['Approved' => true, 'Size' => 100, 'Page' => 1]);
@@ -161,13 +166,13 @@ $productData = [
     ]
 ];
 
-$result = $productService->createProduct($productData);
+$result = $productService->create($productData);
 
 // Ürün fiyatını güncelle
-$result = $productService->updateProductPrice('urun-kodu-123', 799.99, 749.99);
+$result = $productService->updatePrice('urun-kodu-123', 799.99, 749.99);
 
 // Ürün stok miktarını güncelle
-$result = $productService->updateProductStock('urun-kodu-123', 10);
+$result = $productService->updateStock('urun-kodu-123', 10);
 
 // Batch işlem sonucunu kontrol et
 $result = $productService->checkBatchResult('batch-request-id');
@@ -177,7 +182,7 @@ $result = $productService->checkBatchResult('batch-request-id');
 
 ```php
 // Sipariş servisine erişim
-$orderService = pazarama_api()->orders();
+$orderService = pazarama()->orders();
 
 // Sipariş listesini getir
 $orders = $orderService->list([
@@ -189,10 +194,10 @@ $orders = $orderService->list([
 $order = $orderService->get('siparis-numarasi');
 
 // Sipariş durumunu güncelle
-$result = $orderService->updateOrderStatus('siparis-numarasi', 12); // 12: Siparişiniz Hazırlanıyor
+$result = $orderService->updateStatus('siparis-numarasi', 12); // 12: Siparişiniz Hazırlanıyor
 
 // Kargo bilgisini güncelle
-$result = $orderService->updateOrderShipment(
+$result = $orderService->updateShipment(
     'siparis-numarasi',
     'order-item-id',
     5, // 5: Siparişiniz Kargoya Verildi
@@ -208,190 +213,177 @@ $result = $orderService->updateInvoiceLink(
     'siparis-id'
 );
 
-// Finansal bilgileri getir
-$financialData = $orderService->getPaymentAgreement([
-    'startDate' => '2023-01-01T00:00:01.768Z',
-    'endDate' => '2023-01-31T23:59:59.768Z'
+// İade listesini getir
+$returns = $orderService->getReturns([
+    'startDate' => '2023-01-01',
+    'endDate' => '2023-01-31'
 ]);
+
+// İade durumunu güncelle
+$result = $orderService->updateRefundStatus('iade-id', 2); // 2: Onay
+
+// Tekil iade bilgisini getir
+$return = $orderService->getReturn('iade-id');
+
+// İade alt öğelerini (ürünlerini) getir
+$returnItems = $orderService->getReturnItems('iade-id');
 ```
 
 ### Kategori Yönetimi (CategoryService)
 
 ```php
 // Kategori servisine erişim
-$categoryService = pazarama_api()->categories();
+$categoryService = pazarama()->categories();
 
 // Kategori ağacını getir
 $categories = $categoryService->list();
 
 // Kategori özelliklerini getir
-$categoryAttributes = $categoryService->getCategoryAttributes('kategori-id');
+$categoryAttributes = $categoryService->getAttributes('kategori-id');
 
 // Kategori için gerekli özellikleri getir
-$requiredAttributes = $categoryService->getRequiredAttributesForCategory('kategori-id');
+$requiredAttributes = $categoryService->getRequiredAttributes('kategori-id');
 ```
 
 ### Marka Yönetimi (BrandService)
 
 ```php
 // Marka servisine erişim
-$brandService = pazarama_api()->brands();
+$brandService = pazarama()->brands();
 
 // Marka listesini getir
 $brands = $brandService->list(1, 100);
 
 // Markayı adına göre getir
-$brand = $brandService->getBrandByName('Marka Adı');
+$brand = $brandService->getByName('Marka Adı');
 ```
 
 ### Kargo ve Teslimat Yönetimi (ShippingService)
 
 ```php
 // Kargo servisine erişim
-$shippingService = pazarama_api()->shipping();
+$shippingService = pazarama()->shipping();
 
-// Teslimat tiplerini getir
-$deliveryTypes = $shippingService->getSellerDelivery();
+// Kargo firmaları listesini getir
+$companies = $shippingService->getCompanies();
 
-// Şehir listesini getir
-$cities = $shippingService->getCities();
-
-// Kargo firmalarını getir
-$carriers = $shippingService->getCarriers();
+// Teslimat sürelerini getir
+$deliveryTimes = $shippingService->getDeliveryTimes();
 ```
 
 ### İade Yönetimi (ReturnService)
 
 ```php
 // İade servisine erişim
-$returnService = pazarama_api()->returns();
+$returnService = pazarama()->returns();
 
 // İade listesini getir
-$returns = $returnService->getReturns([
-    'pageSize' => 10,
-    'pageNumber' => 1,
-    'refundStatus' => 1, // 1: İade Onayı Bekliyor
-    'requestStartDate' => '2023-01-01',
-    'requestEndDate' => '2023-01-31'
+$returns = $returnService->list([
+    'startDate' => '2023-01-01',
+    'endDate' => '2023-01-31'
 ]);
 
 // İade detayını getir
-$return = $returnService->getReturn('iade-id');
+$return = $returnService->get('iade-id');
 
-// İade durumunu güncelle
-$result = $returnService->updateRefundStatus(
-    'iade-id',
-    2 // 2: Tedarikçi Tarafından Onaylandı
-);
+// İade onayı ver
+$result = $returnService->approve('iade-id', 'onay-notu');
+
+// İade reddet
+$result = $returnService->reject('iade-id', 'red-nedeni');
 ```
 
 ### Toplu İşlemler (BulkOperationService)
 
 ```php
 // Toplu işlem servisine erişim
-$bulkService = pazarama_api()->bulk();
+$bulkService = pazarama()->bulkOperations();
 
 // Toplu fiyat güncelleme
-$priceUpdates = [
-    [
-        'code' => 'urun-kodu-1',
-        'listPrice' => 199.99,
-        'salePrice' => 179.99
-    ],
-    [
-        'code' => 'urun-kodu-2',
-        'listPrice' => 299.99,
-        'salePrice' => 279.99
-    ]
+$updates = [
+    ['code' => 'urun-kodu-1', 'listPrice' => 150.99, 'salePrice' => 125.99],
+    ['code' => 'urun-kodu-2', 'listPrice' => 200.99, 'salePrice' => 185.99],
 ];
-
-$result = $bulkService->updatePrices($priceUpdates);
+$result = $bulkService->updatePrices($updates);
 
 // Toplu stok güncelleme
 $stockUpdates = [
-    [
-        'code' => 'urun-kodu-1',
-        'stockCount' => 10
-    ],
-    [
-        'code' => 'urun-kodu-2',
-        'stockCount' => 20
-    ]
+    ['code' => 'urun-kodu-1', 'stockCount' => 15],
+    ['code' => 'urun-kodu-2', 'stockCount' => 25],
 ];
-
 $result = $bulkService->updateStocks($stockUpdates);
 
-// Toplu ürün oluşturma
-$products = [
-    // Ürün verileri dizisi
-];
-
-$result = $bulkService->createProducts(['products' => $products]);
-
-// Batch işlem sonucunu kontrol et
-$result = $bulkService->checkBatchResult('batch-request-id');
+// Toplu işlem durumu sorgulama
+$status = $bulkService->checkStatus('batch-id');
 ```
 
 ## Hata Yönetimi
 
-API istekleri sırasında oluşabilecek hataları yakalamak için try-catch bloğu kullanabilirsiniz:
+Pazarama API istekleri sırasında oluşabilecek hataları yakalamak için `try-catch` blokları kullanabilirsiniz:
 
 ```php
 use PazaramaApi\PazaramaSpApi\Exceptions\PazaramaApiException;
 
 try {
-    $products = pazarama_api()->products()->list();
+    $products = pazarama()->products()->list();
 } catch (PazaramaApiException $e) {
-    // API hatası
-    $statusCode = $e->getCode();
-    $errorMessage = $e->getMessage();
+    // Hata mesajını al
+    $message = $e->getMessage();
     
-    // Hatayı işleyin
-} catch (\Exception $e) {
-    // Diğer hatalar
-    // Hatayı işleyin
+    // HTTP durum kodunu al
+    $statusCode = $e->getCode();
+    
+    // API hata kodunu al
+    $apiCode = $e->getApiCode();
+    
+    // API yanıtını al (detaylı hata bilgisi)
+    $response = $e->getResponse();
+    
+    // Hata kaydı oluştur veya kullanıcıya bilgi ver
+    Log::error('Pazarama API Hatası', [
+        'message' => $message,
+        'code' => $statusCode,
+        'api_code' => $apiCode,
+        'response' => $response
+    ]);
 }
 ```
 
-## Durum Kodları
+## Test Edilebilirlik
 
-Pazarama API'den dönebilecek önemli durum kodları:
+Paket test edilebilirliği destekler. Gerçek API çağrıları yapmadan birim testleri yazabilmeniz için mock yapıları içerir.
 
-### Sipariş Durum Kodları
+```php
+use PazaramaApi\PazaramaSpApi\PazaramaSpApi;
+use PazaramaApi\PazaramaSpApi\Services\ProductService;
 
-- 3: Siparişiniz Alındı
-- 12: Siparişiniz Hazırlanıyor
-- 13: Tedarik Edilemedi
-- 5: Siparişiniz Kargoya Verildi
-- 11: Teslim Edildi
-- 14: Teslim Edilemedi
-- 7: İade Süreci Başlatıldı
-- 8: İade Onaylandı
-- 9: İade Reddedildi
-- 10: İade Edildi
+// Mock PazaramaSpApi nesnesi oluşturma
+$mockedApi = Mockery::mock(PazaramaSpApi::class);
 
-### İade Durum Kodları
+// Mock ProductService nesnesi oluşturma
+$mockedProductService = Mockery::mock(ProductService::class);
 
-- 1: İade Onayı Bekliyor
-- 2: Tedarikçi Tarafından Onaylandı
-- 3: Tedarikçi Tarafından Reddedildi
-- 4: Backoffice Tarafından Onaylandı
-- 5: Backoffice Tarafından Reddedildi
-- 6: Auto Approved
+// Beklenen davranışı tanımlama
+$mockedProductService->shouldReceive('list')
+    ->once()
+    ->with(['Approved' => true])
+    ->andReturn(['data' => [/* ürün verileri */]]);
 
-### Ödeme Tipleri
+$mockedApi->shouldReceive('products')
+    ->once()
+    ->andReturn($mockedProductService);
 
-- 1: Kredi Kartı
-- 2: İstanbul Kart
-- 3: Taksitli Ek Hesap
+// Mock'lanmış servisi uygulama konteynerine kaydetme
+$this->app->instance('pazarama', $mockedApi);
 
-### Teslimat Tipleri
+// Test kodu
+$result = app('pazarama')->products()->list(['Approved' => true]);
 
-- 1: Kargo (CargoDelivery)
-- 2: Kurye (FastDelivery)
-- 3: Mağazadan Teslimat (StoreDelivery)
-- 4: Dijital
+// Assertion
+$this->assertIsArray($result);
+$this->assertArrayHasKey('data', $result);
+```
 
 ## Lisans
 
-Bu paket MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE](LICENSE) dosyasına bakabilirsiniz. 
+Bu paket MIT lisansı altında lisanslanmıştır. Daha fazla bilgi için [LICENSE](LICENSE) dosyasına göz atabilirsiniz. 
